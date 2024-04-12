@@ -22,6 +22,7 @@ use darkfi::{
 };
 
 
+use darkfi_money_contract::model::Nullifier;
 
 #[test]
 fn zkvm_merkle_tree() -> Result<()> {
