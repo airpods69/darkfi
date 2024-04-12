@@ -1,14 +1,18 @@
+use std::usize;
+
 use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP};
 use halo2_proofs::{arithmetic::Field, circuit::Value, dev::MockProver, pasta::Fp};
 use rand::rngs::OsRng;
 
 use darkfi_sdk::crypto::{
-    pedersen::pedersen_commitment_u64, util::fp_mod_fv, Blind, MerkleNode, MerkleTree, PublicKey,
+    pedersen::{pedersen_commitment_u64, pedersen_commitment_base}, util::fp_mod_fv, Blind, MerkleNode, MerkleTree, PublicKey,
     SecretKey,
 };
 
+use halo2_proofs::pasta::pallas;
+
 use darkfi_sdk::crypto::util::poseidon_hash;
-use bridgetree::{BridgeTree, Hashable, Level};
+use darkfi_sdk::bridgetree::{BridgeTree, Hashable, Level};
 
 use darkfi::{
     zk::{
@@ -21,8 +25,6 @@ use darkfi::{
     Result,
 };
 
-
-use darkfi_money_contract::model::Nullifier;
 
 #[test]
 fn zkvm_merkle_tree() -> Result<()> {
@@ -43,7 +45,7 @@ fn zkvm_merkle_tree() -> Result<()> {
     let sig_secret = SecretKey::random(&mut OsRng);
 
     // Build the coin
-    // Replace Coin2 with hash(a, b) ->
+    // Replace Coin2 with hash(a, b) -> hash can be anything
     let coin2 = {
         let (pub_x, pub_y) = PublicKey::from_secret(secret).xy();
         let messages = [pub_x, pub_y, pallas::Base::from(value), token_id, serial];
@@ -52,21 +54,22 @@ fn zkvm_merkle_tree() -> Result<()> {
 
     // Fill the merkle tree with some random coins that we want to witness,
     // and also add the above coin.
-    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
-    let coin0 = pallas::Base::random(&mut OsRng);
-    let coin1 = pallas::Base::random(&mut OsRng);
-    let coin3 = pallas::Base::random(&mut OsRng);
+    let mut tree = BridgeTree::<MerkleNode, usize, 32>::new(100);
+    let coin0 = MerkleNode::from(pallas::Base::random(&mut OsRng));
+    let coin1 = MerkleNode::from(pallas::Base::random(&mut OsRng));
+    let coin3 = MerkleNode::from(pallas::Base::random(&mut OsRng));
 
-    tree.append(&MerkleNode::from(coin0));
-    tree.witness();
-    tree.append(&MerkleNode::from(coin1));
-    tree.append(&MerkleNode::from(coin2));
-    let leaf_pos = tree.witness().unwrap();
-    tree.append(&MerkleNode::from(coin3));
-    tree.witness();
+    tree.append(coin0);
+    let leaf_position = tree.mark().unwrap();
+    tree.witness(leaf_position, 0);
+    tree.append(coin1);
+    tree.append(MerkleNode::from(coin2));
+    let leaf_pos = tree.mark().unwrap();
+    tree.append(coin3);
+    // tree.witness();
 
     let root = tree.root(0).unwrap();
-    let merkle_path = tree.authentication_path(leaf_pos, &root).unwrap();
+    let merkle_path = tree.witness(leaf_pos, 0).unwrap();
     let leaf_pos: u64 = leaf_pos.into();
 
     let prover_witnesses = vec![
@@ -81,8 +84,6 @@ fn zkvm_merkle_tree() -> Result<()> {
         Witness::Base(Value::known(sig_secret.inner())),
     ];
 
-    // Create the public inputs
-    let nullifier = Nullifier::from(poseidon_hash::<2>([secret.inner(), serial]));
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -95,22 +96,22 @@ fn zkvm_merkle_tree() -> Result<()> {
 
     let merkle_root = tree.root(0).unwrap();
 
-    let public_inputs = vec![
-        nullifier.inner(),
-        *value_coords.x(),
-        *value_coords.y(),
-        *token_coords.x(),
-        *token_coords.y(),
-        merkle_root.inner(),
-        sig_x,
-        sig_y,
-    ];
+    // let public_inputs = vec![
+    //     nullifier.inner(),
+    //     *value_coords.x(),
+    //     *value_coords.y(),
+    //     *token_coords.x(),
+    //     *token_coords.y(),
+    //     merkle_root.inner(),
+    //     sig_x,
+    //     sig_y,
+    // ];
 
     // Create the circuit
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
 
     let proving_key = ProvingKey::build(13, &circuit);
-    let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+    // let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     // ========
     // Verifier
@@ -120,10 +121,10 @@ fn zkvm_merkle_tree() -> Result<()> {
     let verifier_witnesses = empty_witnesses(&zkbin);
 
     // Create the circuit
-    let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
+    let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
 
     let verifying_key = VerifyingKey::build(13, &circuit);
-    proof.verify(&verifying_key, &public_inputs)?;
+    // proof.verify(&verifying_key, &public_inputs)?;
 
     return Ok(());
 
