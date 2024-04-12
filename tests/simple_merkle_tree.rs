@@ -1,23 +1,15 @@
-
-use std::usize;
-
-use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP};
-use halo2_proofs::{arithmetic::Field, circuit::Value, dev::MockProver, pasta::Fp};
-use libc::printf;
+use halo2_proofs::{arithmetic::Field, circuit::Value};
 use rand::rngs::OsRng;
 
 use darkfi_sdk::crypto::{
-    pedersen::{pedersen_commitment_u64, pedersen_commitment_base}, util::fp_mod_fv, Blind, MerkleNode, MerkleTree, PublicKey,
-    SecretKey,
+    MerkleNode, MerkleTree,
 };
 
 use halo2_proofs::pasta::pallas;
 
 use darkfi_sdk::crypto::util::poseidon_hash;
-use darkfi_sdk::bridgetree::{BridgeTree, Hashable, Level};
+use darkfi_sdk::bridgetree::Hashable;
 
-use darkfi_sdk::crypto::pasta_prelude::Curve;
-use halo2_proofs::arithmetic::CurveAffine;
 
 use darkfi::{
     zk::{
@@ -29,10 +21,6 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-
-use darkfi_serial::Encodable;
-
-
 
 #[test]
 fn zkvm_merkle_tree() -> Result<()> {
@@ -57,7 +45,14 @@ fn zkvm_merkle_tree() -> Result<()> {
 
     let k = zkbin.k;
 
-    let coin2 = pallas::Base::random(&mut OsRng);
+    // Random values a and b hardcoded for now
+    let a = 10;
+    let b = 1199;
+
+    let hash = (a + b) * (a + b + 1) / 2 + a;
+
+    let coin2 = pallas::Base::from(hash);
+    // let coin2 = pallas::Base::random(&mut OsRng);
 
     tree.append(MerkleNode::from(coin2));
     let leaf_position = tree.mark().unwrap();
