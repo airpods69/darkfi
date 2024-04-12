@@ -14,6 +14,9 @@ use halo2_proofs::pasta::pallas;
 use darkfi_sdk::crypto::util::poseidon_hash;
 use darkfi_sdk::bridgetree::{BridgeTree, Hashable, Level};
 
+use darkfi_sdk::crypto::pasta_prelude::Curve;
+use halo2_proofs::arithmetic::CurveAffine;
+
 use darkfi::{
     zk::{
         proof::{ProvingKey, VerifyingKey},
@@ -46,11 +49,9 @@ fn zkvm_merkle_tree() -> Result<()> {
 
     // Build the coin
     // Replace Coin2 with hash(a, b) -> hash can be anything
-    let coin2 = {
-        let (pub_x, pub_y) = PublicKey::from_secret(secret).xy();
-        let messages = [pub_x, pub_y, pallas::Base::from(value), token_id, serial];
-        poseidon_hash(messages)
-    };
+    let a = 10;
+    let b = 9;
+    let coin2 = Fp::from(10); // Ignoring this for now, I'll change it to a hash later
 
     // Fill the merkle tree with some random coins that we want to witness,
     // and also add the above coin.
@@ -85,10 +86,10 @@ fn zkvm_merkle_tree() -> Result<()> {
     ];
 
 
-    let value_commit = pedersen_commitment_u64(value, value_blind);
+    let value_commit = pedersen_commitment_u64(value, Blind(value_blind));
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
-    let token_commit = pedersen_commitment_base(token_id, token_blind);
+    let token_commit = pedersen_commitment_base(token_id, Blind(token_blind));
     let token_coords = token_commit.to_affine().coordinates().unwrap();
 
     let sig_pubkey = PublicKey::from_secret(sig_secret);
@@ -118,7 +119,7 @@ fn zkvm_merkle_tree() -> Result<()> {
     // ========
 
     // Construct empty witnesses
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin).unwrap();
 
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
