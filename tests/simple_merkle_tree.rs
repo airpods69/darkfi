@@ -46,10 +46,10 @@ fn zkvm_merkle_tree() -> Result<()> {
     let k = zkbin.k;
 
     // Random values a and b hardcoded for now
-    let a = 10;
-    let b = 1199;
+    let a = pallas::Base::from(10);
+    let b = pallas::Base::from(1991);
 
-    let hash = (a + b) * (a + b + 1) / 2 + a;
+    let hash = poseidon_hash([a, b]);
 
     let coin2 = pallas::Base::from(hash);
     // let coin2 = pallas::Base::random(&mut OsRng);
